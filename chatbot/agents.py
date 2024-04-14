@@ -50,7 +50,6 @@ class AgentManager:
         ## Debugging with relevant documents
         retriever = vectorstore.as_retriever(search_kwargs={"k": 10})
         # print("relevant docs",vectorstore.as_retriever().get_relevant_documents("what are the latest transactions for fidelity and Larrain Vial?"))
-        # print("relevant docs",vectorstore.as_retriever().get_relevant_documents("what was the financial performance of nubank last year?"))
 
         conversational_qa_agent = ConversationalRetrievalChain(
                 retriever=retriever,
@@ -64,13 +63,6 @@ class AgentManager:
         
         return conversational_qa_agent, retriever
 
-    # def initialize_custom_excel_tool(self, tool):
-    #     prompt = Prompt(self.client_name, self.tools)
-    #     self.custom_excel_tool_prompt = prompt.initialize_prompt(tool_prompt=True)
-        
-    #     chain_manager = ChainManager(llm=self.llm, prompt=self.custom_excel_tool_prompt, tools=[tool])
-    #     self.custom_excel_tool_chain = chain_manager.initialize_tool_chain()
-
     def reinitialize_agent_and_executor(self, tools, metadata):
         self.tools = tools
         self.metadata = metadata
@@ -82,8 +74,6 @@ class AgentManager:
 
         if agent_type == 'conversational_qa':
             selected_agent = self.conversational_qa_agent
-        elif agent_type == 'custom_excel_tool':
-            selected_agent = self.agent_executor
 
         if callbacks:
             return selected_agent.run(user_prompt, callbacks=callbacks, tags=self.tags, metadata=self.metadata)

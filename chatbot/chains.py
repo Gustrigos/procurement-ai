@@ -12,8 +12,3 @@ class ChainManager:
         
         return llm_chain
 
-    # def initialize_tool_chain(self):
-    #     llm_chain = ToolChain(prompt=self.prompt, tools=self.tools, verbose=True)
-        
-    #     return llm_chain
-    

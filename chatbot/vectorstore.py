@@ -37,20 +37,28 @@ class VectorstoreHandler:
         handler = XrefWarningCounterHandler()
         logger.addHandler(handler)  
 
-    def process_pdf_from_url(self, pdf_url):
-        response = requests.get(pdf_url)
-        if response.status_code == 200:
-            # Create a temporary file to store the PDF
-            with NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_pdf:
-                tmp_pdf.write(response.content)
-                tmp_pdf_path = tmp_pdf.name
-            
-            vectorstore = self.pdf_reader([tmp_pdf_path])
-            
+    def process_pdfs_from_urls(self, pdf_urls):
+        pdf_paths = []
 
+        # Process each URL in the pdf_urls list
+        for pdf_url in pdf_urls:
+            response = requests.get(pdf_url)
+            if response.status_code == 200:
+                # Create a temporary file to store each PDF
+                with NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_pdf:
+                    tmp_pdf.write(response.content)
+                    # Save the temporary PDF path
+                    pdf_paths.append(tmp_pdf.name)
+            else:
+                logging.error(f"Failed to download PDF from {pdf_url}. HTTP status code: {response.status_code}")
+
+        # Check if any PDFs were downloaded and processed
+        if pdf_paths:
+            # Create a single vectorstore from all PDF paths
+            vectorstore = self.pdf_reader(pdf_paths)
             return vectorstore
         else:
-            logging.error(f"Failed to download PDF from {pdf_url}. HTTP status code: {response.status_code}")
+            logging.error("No PDFs were processed successfully.")
             return None
 
     def get_pdf_text(self, pdf_docs):

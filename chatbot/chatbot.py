@@ -20,16 +20,6 @@ ENVIRONMENT = os.getenv("ENVIRONMENT", "prod")  # default to local if not set
 env_file_path = ".env.local"
 load_dotenv(env_file_path)
 os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
-os.environ["SERPAPI_API_KEY"] = os.getenv("SER_KEY")
-
-# Langsmith tracing
-os.environ["LANGCHAIN_TRACING_V2"] = os.getenv("LANGCHAIN_TRACING_V2")
-os.environ["LANGCHAIN_ENDPOINT"] = os.getenv("LANGCHAIN_ENDPOINT")
-os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGCHAIN_API_KEY")
-if ENVIRONMENT == "local":
-    os.environ["LANGCHAIN_PROJECT"] = "localhost"
-else:
-    os.environ["LANGCHAIN_PROJECT"] = "ec2-mvp"
 
 from chatbot.vectorstore import VectorstoreHandler
 
@@ -49,8 +39,6 @@ class Chatbot:
 
         # Instantiate Tools
         self.tool_manager = ToolManager(self.llm, self.data_dict)
-        self.tool_manager.initialize_tool('general_search')
-        self.tool_manager.initialize_tool('financial_search')
         # Add new tools here...
         self.tools = self.tool_manager.tools
 
@@ -78,20 +66,29 @@ class Chatbot:
         self.data_dict = data_dict
 
         pdf_description = None
-        pdf_metadata = None
-        
+        pdf_metadata = []
+
         # Pass the updated data_dict to the tool_manager
         self.tool_manager.data_dict = self.data_dict
 
-        # Initialize Conversational QA Agent
-        pdf_dict =  self.data_dict.get('pdf', None)
-        
-        if pdf_dict:
+        # Extract PDFs directly or use an empty list as default
+        pdfs = getattr(data_dict, 'pdfs', [])
+        pdf_urls = [pdf.pdfUrl for pdf in pdfs if hasattr(pdf, 'pdfUrl')]
+
+        if pdf_urls:
             vectorstore_handler = VectorstoreHandler()
 
-            vectorstore = vectorstore_handler.process_pdf_from_url(pdf_dict.get('pdfUrl', None))
-            pdf_description = pdf_dict.get('description', None)
-            pdf_metadata = pdf_dict.get('metadata', None)
+            # Process multiple PDF URLs
+            vectorstore = vectorstore_handler.process_pdfs_from_urls(pdf_urls)
+            
+            # Collect descriptions and metadata if available
+            pdf_descriptions = [pdf.description for pdf in pdfs if hasattr(pdf, 'description')]
+            pdf_description = " ".join(pdf_descriptions)  # Concatenate descriptions
+            
+            # Collect metadata if available, handle it properly assuming it could be a list of objects or dicts
+            for pdf in pdfs:
+                if hasattr(pdf, 'metadata') and pdf.metadata is not None:
+                    pdf_metadata.append(pdf.metadata)
 
             if vectorstore is not None:
                 conversational_qa_agent, retriever = self.agent_manager.initialize_conversational_qa_agent(vectorstore, memory=self.conversational_qa_memory)
@@ -99,9 +96,8 @@ class Chatbot:
                 # Initialize Conversational QA Tool
                 pdf_tool_description = "Useful for answering questions related to PDF files that can be contracts, invoices, and other financial documents."
                 
-                if pdf_metadata:
-                    for index, pdf_file in enumerate(pdf_metadata, start=1):
-                        pdf_tool_description += f" The file name of Document {index} is {pdf_file.name}, and its file type is {pdf_file.type}."
+                for index, metadata in enumerate(pdf_metadata, start=1):
+                    pdf_tool_description += f" The file name of Document {index} is {getattr(metadata, 'name', 'unknown')}, and its file type is {getattr(metadata, 'type', 'unknown')}."
 
                 if pdf_description:
                     pdf_tool_description += f" The documents are about: {pdf_description}."
@@ -119,8 +115,7 @@ class Chatbot:
         }     
 
         # Re-initialize the agent and executor with the updated tools
-        self.agent_manager.reinitialize_agent_and_executor(tools=self.tools, metadata = self.metadata)
-    
+        self.agent_manager.reinitialize_agent_and_executor(tools=self.tools, metadata=self.metadata)
 
     def set_model(self, model):
         self.model = model
@@ -137,12 +132,11 @@ class Chatbot:
     def process_message(self, user_prompt, callbacks=None, agent_type=None):
         
         try:
-            return self.agent_manager.process_message(user_prompt, callbacks, agent_type)
+            result = self.agent_manager.process_message(user_prompt, callbacks, agent_type)
+            return result
         except Exception as e:
-            # Log the error with traceback
-            error_message = f"Process message had an error: {str(e)}"
-            logging.error(error_message)
-            logging.error(traceback.format_exc())
-            
-            return json.dumps({"error": traceback.format_exc()})
+            logging.error(f"Failed to process message: {str(e)}")
+            logging.error(f"Data received: '{user_prompt}'")  # Log the input data that caused the error
+            logging.error(traceback.format_exc())  # Include the traceback to see where the error occurred
+            return json.dumps({"error": "Internal server error", "detail": str(e)})
         

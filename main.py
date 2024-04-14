@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from chatbot.chatbot import Chatbot
 import json 
 from fastapi.middleware.cors import CORSMiddleware
+from typing import List, Dict
 
 app = FastAPI()
 
@@ -18,6 +19,12 @@ app.add_middleware(
     allow_headers=["*"],  
 )
 
+class PDF(BaseModel):
+    pdfUrl: str
+
+class DataDict(BaseModel):
+    pdfs: List[PDF]
+
 class ChatQuery(BaseModel):
     query: str
     model: str = "gpt-4-32k-0613"
@@ -25,7 +32,7 @@ class ChatQuery(BaseModel):
     custom_instructions: str = ""
     temperature: float = 0.0
     env: str = "prod"
-    data_dict: dict = {}
+    data_dict: DataDict
 
 @app.post("/process-message/")
 async def chat(query: ChatQuery):
@@ -62,6 +69,4 @@ async def process_pdf(query: ChatQuery):
         return response_data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
-        
     
